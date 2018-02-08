@@ -61,44 +61,48 @@ function requestPrivateApi(host, endpoint, callback) {
 }
 
 function requestPublicApi(host, endpoint, callback) {
-    var url = host + endpoint
-    log("Request public api: " + url)
-    request({
-        method: 'GET',
-        url: url,
-    }, function (error, response, body) {
-        // log('Status:', response.statusCode)
-        // log('Headers:', JSON.stringify(response.headers))
-        // log('Response:', body)
-        if (callback) callback(error, response, body)
+    return new Promise(function (resolve, reject) {
+        var url = host + endpoint
+        log("Request public api: " + url)
+        request({
+            method: 'GET',
+            url: url,
+        }, function (error, response, body) {
+            // log('Status:', response.statusCode)
+            // log('Headers:', JSON.stringify(response.headers))
+            // log('Response:', body)
+            if (callback) callback(error, response, body)
+            if (error) reject(error)
+            else resolve(response)
+
+        })
     })
 }
 
 // requestPrivateApi(host, userEndpoint)
 var fee = 0.001 //0.1%
-
-requestPublicApi(host, "/v1/KCS-ETH/open/tick", function (error, response, body) {
-    var bodyZ = JSON.parse(body)
-    var Z = bodyZ.data.sell //Buy KCS from ETH
-    log("Z: " + Z)
-    requestPublicApi(host, "/v1/KCS-BTC/open/tick", function (error, response, body) {
-        var bodyY = JSON.parse(body)
-        var Y = bodyY.data.buy //Sell KCS to BTC
-        log("Y: " + Y)
-        requestPublicApi(host, "/v1/ETH-BTC/open/tick", function (error, response, body) {
-            var bodyL = JSON.parse(body)
-            var L = bodyL.data.sell //Buy ETH from BTC
-            log("L: " + L)
-
-            var left = Y
-            var right = Z * L * (1 - fee)
-            var change = (right / left - 1) * 100
-
-            log(`Condition 'Y < Z x L x (1-fee)' is ${left < right} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
-        })
-    })
-
-
-
-
+var getZ = requestPublicApi(host, "/v1/KCS-ETH/open/tick").then(function (response) {
+    var body = JSON.parse(response.body)
+    return Promise.resolve(body.data.sell) //Buy KCS from ETH
 })
+var getY = requestPublicApi(host, "/v1/KCS-BTC/open/tick").then(function (response) {
+    var body = JSON.parse(response.body)
+    return Promise.resolve(body.data.buy) //Sell KCS to BTC
+})
+var getL = requestPublicApi(host, "/v1/ETH-BTC/open/tick").then(function (response) {
+    var body = JSON.parse(response.body)
+    return Promise.resolve(body.data.sell) //Buy ETH from BTC
+})
+
+Promise.all([getZ, getY, getL]).then(function (values) {
+    console.log(values);
+    var Z = values[0]
+    var Y = values[1]
+    var L = values[2]
+
+    var left = Y
+    var right = Z * L * (1 - fee)
+    var change = (right / left - 1) * 100
+    log(`Condition 'Y < Z x L x (1-fee)' is ${left < right} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
+});
+
