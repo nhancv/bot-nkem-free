@@ -6,18 +6,9 @@ const log = console.log
 var host = "https://api.kucoin.com"
 var userEndpoint = "/v1/user/info"
 
-
-var kucoinSymbols = [
-    "KCS-ETH",
-    "KCS-BTC",
-    "ETH-BTC",
-]
-var symbolActive = kucoinSymbols[0]
-var orderBooksEndpoint = "/v1/" + symbolActive + "/open/orders" //public
-var tickEndpoint = "/v1/" + symbolActive + "/open/tick" //public
-var marketFavouriteSymbols = "/v1/market/fav-symbols" //["KCS-BTC","ETH-BTC","NEO-BTC","KCS-ETH","NEO-ETH"]
-
-var endpoint = tickEndpoint  // API endpoint
+var pairZ = "KCS-ETH"
+var pairY = "KCS-BTC"
+var pairL = "ETH-BTC"
 
 //================
 //MAKE REST API
@@ -28,7 +19,7 @@ function isBlank(str) {
 function requestOrderApi(host, endpoint, type, amount, price) {
     return new Promise(function (resolve, reject) {
         var url = host + endpoint
-        log("Request order api: " + url)
+        log(`Request order ${type} ${amount} ${price}: ${url}`)
         var publicKey = apiKey.Key
         var secret = apiKey.Secret //The secret assigned when the API created
         var nonce = Date.now()
@@ -64,13 +55,7 @@ function requestOrderApi(host, endpoint, type, amount, price) {
                 "price": price
             }
         }, function (error, response, body) {
-            if (error) {
-                log(error)
-            } else {
-                log('Status:', response.statusCode)
-                log('Headers:', JSON.stringify(response.headers))
-                log('Response:', body)
-            }
+            log(body)
             if (error) reject(error)
             else resolve(response)
         })
@@ -111,13 +96,7 @@ function requestPrivateGetApi(host, endpoint, queryString) {
                 "Content-Type": "application/json"
             }
         }, function (error, response, body) {
-            if (error) {
-                log(error)
-            } else {
-                log('Status:', response.statusCode)
-                log('Headers:', JSON.stringify(response.headers))
-                log('Response:', body)
-            }
+            log(body)
             if (error) reject(error)
             else resolve(response)
         })
@@ -132,13 +111,6 @@ function requestPublicApi(host, endpoint) {
             method: "GET",
             url: url,
         }, function (error, response, body) {
-            // if (error) {
-            //     log(error)
-            // } else {
-            //     log('Status:', response.statusCode)
-            //     log('Headers:', JSON.stringify(response.headers))
-            //     log('Response:', body)
-            // }
             if (error) reject(error)
             else resolve(response)
 
@@ -149,15 +121,15 @@ function requestPublicApi(host, endpoint) {
 // requestPrivateGetApi(host, userEndpoint)
 
 var fee = 0.001 //0.1%
-var getZ = requestPublicApi(host, "/v1/KCS-ETH/open/orders-sell").then(function (response) {
+var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
     var body = JSON.parse(response.body)
     return Promise.resolve(body.data[0]) //Buy KCS from ETH
 })
-var getY = requestPublicApi(host, "/v1/KCS-BTC/open/orders-buy").then(function (response) {
+var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(function (response) {
     var body = JSON.parse(response.body)
     return Promise.resolve(body.data[0]) //Sell KCS to BTC
 })
-var getL = requestPublicApi(host, "/v1/ETH-BTC/open/orders-sell").then(function (response) {
+var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function (response) {
     var body = JSON.parse(response.body)
     return Promise.resolve(body.data[0]) //Buy ETH from BTC
 })
@@ -174,6 +146,7 @@ Promise.all([getZ, getY, getL]).then(function (values) {
     var LPrice = values[2][0]
     var LAmount = Math.min(ZPrice * ZAmount, values[2][1]).toFixed(2)
 
+    log(`${ZPrice} ${YPrice} ${LPrice} : ${ZAmount} ${YAmount} ${LAmount}`)
     var left = YPrice.toFixed(6)
     var right = (ZPrice * LPrice * (1 - fee)).toFixed(6)
     var change = ((right / left - 1) * 100).toFixed(2)
@@ -181,14 +154,14 @@ Promise.all([getZ, getY, getL]).then(function (values) {
     log(`Condition 'Y < Z x L x (1-fee)' is ${condition} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
     if (condition) {
         //Buy KCS from ETH
-        requestOrderApi(host, "/v1/KCS-ETH/order", "BUY", ZAmount, ZPrice)
+        requestOrderApi(host, `/v1/${pairZ}/order`, "BUY", ZAmount, ZPrice)
             .then(
             //Sell KCS to BTC
-            requestOrderApi(host, "/v1/KCS-BTC/order", "SELL", YAmount, YPrice)
+            requestOrderApi(host, `/v1/${pairY}/order`, "SELL", YAmount, YPrice)
             )
             .then(
             //Buy ETH from BTC
-            requestOrderApi(host, "/v1/ETH-BTC/order", "BUY", LAmount, LPrice)
+            requestOrderApi(host, `/v1/${pairL}/order`, "BUY", LAmount, LPrice)
             )
 
     }
