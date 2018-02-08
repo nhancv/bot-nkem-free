@@ -6,8 +6,10 @@ const log = console.log
 var host = "https://api.kucoin.com"
 var userEndpoint = "/v1/user/info"
 
-var pairZ = "KCS-ETH"
-var pairY = "KCS-BTC"
+var targetCoin = "ETC"
+
+var pairZ = `${targetCoin}-ETH`
+var pairY = `${targetCoin}-BTC`
 var pairL = "ETH-BTC"
 
 //================
@@ -55,7 +57,7 @@ function requestOrderApi(host, endpoint, type, amount, price) {
                 "price": price
             }
         }, function (error, response, body) {
-            log(body)
+            log(`=> Response ${endpoint} ${type} ${amount} ${price}: ${body}`)
             if (error) reject(error)
             else resolve(response)
         })
@@ -123,11 +125,11 @@ function requestPublicApi(host, endpoint) {
 var fee = 0.001 //0.1%
 var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
     var body = JSON.parse(response.body)
-    return Promise.resolve(body.data[0]) //Buy KCS from ETH
+    return Promise.resolve(body.data[0]) //Buy TargetCoin from ETH
 })
 var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(function (response) {
     var body = JSON.parse(response.body)
-    return Promise.resolve(body.data[0]) //Sell KCS to BTC
+    return Promise.resolve(body.data[0]) //Sell TargetCoin to BTC
 })
 var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function (response) {
     var body = JSON.parse(response.body)
@@ -137,26 +139,25 @@ var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function
 Promise.all([getZ, getY, getL]).then(function (values) {
     console.log(values);
 
-    var inputAmount = 2 //KCS
+    var inputAmount = 1 //TargetCoin
 
     var ZPrice = values[0][0]
-    var ZAmount = Math.min(inputAmount, values[0][1]).toFixed(2)
+    var ZAmount = Math.min(inputAmount, values[0][1]).toFixed(6)
     var YPrice = values[1][0]
-    var YAmount = Math.min(inputAmount, values[1][1]).toFixed(2)
+    var YAmount = Math.min(inputAmount, values[1][1]).toFixed(6)
     var LPrice = values[2][0]
-    var LAmount = Math.min(ZPrice * ZAmount, values[2][1]).toFixed(2)
+    var LAmount = Math.min(ZPrice * ZAmount, values[2][1]).toFixed(6)
 
-    log(`${ZPrice} ${YPrice} ${LPrice} : ${ZAmount} ${YAmount} ${LAmount}`)
     var left = YPrice.toFixed(6)
     var right = (ZPrice * LPrice * (1 - fee)).toFixed(6)
     var change = ((right / left - 1) * 100).toFixed(2)
     var condition = left < right
     log(`Condition 'Y < Z x L x (1-fee)' is ${condition} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
     if (condition) {
-        //Buy KCS from ETH
+        //Buy TargetCoin from ETH
         requestOrderApi(host, `/v1/${pairZ}/order`, "BUY", ZAmount, ZPrice)
             .then(
-            //Sell KCS to BTC
+            //Sell TargetCoin to BTC
             requestOrderApi(host, `/v1/${pairY}/order`, "SELL", YAmount, YPrice)
             )
             .then(
