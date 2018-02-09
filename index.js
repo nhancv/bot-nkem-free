@@ -238,4 +238,8 @@ function main(index) {
 }
 
 //EXECUTE MAIN
-main(0)
+try {
+    main(0)    
+} catch (error) {
+    console.error(error)
+}
