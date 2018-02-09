@@ -11,21 +11,21 @@ var host = "https://api.kucoin.com"
 var userEndpoint = "/v1/user/info"
 
 const targetPair = [
-    { coin: "ETC", amount: 0.12 },
-    // { coin: "NEO", amount: 0.12 },
+    { coin: "ETC", amount: 0.1 },
+    { coin: "NEO", amount: 0.1 },
     { coin: "KCS", amount: 2 },
     { coin: "RPX", amount: 10 },
     // { coin: "ENJ", amount: 20 },
     // { coin: "POE", amount: 50 },
-    // { coin: "OMG", amount: 1 },
+    { coin: "OMG", amount: 1 },
     // { coin: "BTG", amount: 0.1 },
-    // { coin: "BCH", amount: 0.01 },
+    { coin: "BCH", amount: 0.01 },
 ]
 
 const fee = 0.1 //0.1%
 const checkFee = 0.21 //0.21%
-const remainFee = 1 - fee/100
-const futureFee = 1 + fee/100
+const remainFee = 1 - fee / 100
+const futureFee = 1 + fee / 100
 
 //================
 //MAKE REST API
@@ -37,7 +37,7 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
     return new Promise(function (resolve, reject) {
         var endpoint = `/v1/${pairCoin}/order`
         var url = host + endpoint
-        
+
         // log(`Request order ${type} ${amount} ${price}: ${url}`)
         var publicKey = apiKey.Key
         var secret = apiKey.Secret //The secret assigned when the API created
@@ -74,9 +74,16 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
                 "price": price
             }
         }, function (error, response, body) {
+            var msg = `=> ${type} ${pairCoin} ${amount} ${price}:`
             log(`=> ${type} ${pairCoin} ${amount} ${price}: ${body}`)
-            if (error) reject(error)
-            else resolve(response)
+            if (error) {
+                msg += chalk.red("ERROR")
+                reject(error)
+            } else {
+                msg += body.success ? chalk.green("TRUE") : chalk.red("FALSE")
+                log(`=> ${type} ${pairCoin} ${amount} ${price}: ${body}`)
+                resolve(response)
+            }
         })
     })
 }
@@ -204,7 +211,7 @@ function main(index) {
 
     var targetCoin = targetPair[index].coin
     var inputAmount = targetPair[index].amount
-    log(chalk.blue(`Execute pair: Coin ${targetCoin} - Amount ${inputAmount}`))
+    log(chalk.blue(`Execute pair: Coin ${chalk.yellow(targetCoin)} - Amount ${inputAmount}`))
 
     var pairZ = `${targetCoin}-ETH`
     var pairY = `${targetCoin}-BTC`
