@@ -1,5 +1,5 @@
 {
-  "name": "kemkem",
+  "name": "kem",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -12,7 +12,11 @@
     "chalk": "^2.3.0",
     "request": "^2.83.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhancv/nc-kem-change.git"
+  },
   "bin": {
-    "kemkem": "./index.js"
+    "kem": "./index.js"
   }
 }

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const request = require('request')
 const crypto = require('crypto')
 const chalk = require('chalk')
