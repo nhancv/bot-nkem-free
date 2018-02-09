@@ -74,15 +74,16 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
             }
         }, function (error, response, body) {
             var msg = `=> ${type} ${pairCoin} ${amount} ${price}:`
-            log(`=> ${type} ${pairCoin} ${amount} ${price}: ${body}`)
             if (error) {
                 msg += chalk.red("ERROR")
                 reject(error)
             } else {
-                msg += body.success ? chalk.green("TRUE") : chalk.red("FALSE")
-                log(`=> ${type} ${pairCoin} ${amount} ${price}: ${body}`)
+                body = JSON.parse(body)
+                msg += body.success ? chalk.green.bold(body.code) : chalk.red.bold(body.code)
                 resolve(response)
             }
+            log(msg)
+
         })
     })
 }
@@ -181,7 +182,7 @@ function processing(pairZ, pairY, pairL, inputAmount) {
             var right = (ZPrice * LPrice).toFixed(8)
             var change = ((left / right - 1) * 100).toFixed(2)
             var condition = (left > right) && check && (change > checkFee)
-            log(`Condition is ${condition ? chalk.green("TRUE") : chalk.red("FALSE")} - Change: ${change > 0 ? chalk.green(change) : change < 0 ? chalk.red(change) : change}%`)
+            log(`Trigger is ${condition ? chalk.green.bold("TRUE") : chalk.red.bold("FALSE")} - Change: ${change > 0 ? chalk.green.bold(change) : change < 0 ? chalk.red.bold(change) : change}%`)
             if (condition) {
                 //Buy TargetCoin from ETH
                 requestOrderApi(host, pairZ, "BUY", ZAmount, ZPrice)
@@ -210,7 +211,7 @@ function main(index) {
 
     var targetCoin = targetPair[index].coin
     var inputAmount = targetPair[index].amount
-    log(chalk.blue(`Execute pair: Coin ${chalk.yellow(targetCoin)} - Amount ${inputAmount}`))
+    log(chalk.blue(`Execute pair: Coin ${chalk.yellow.bold(targetCoin)} - Amount ${inputAmount}`))
 
     var pairZ = `${targetCoin}-ETH`
     var pairY = `${targetCoin}-BTC`
