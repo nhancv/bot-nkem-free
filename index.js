@@ -15,10 +15,9 @@ const targetPair = [
     { coin: "NEO", amount: 0.1 },
     { coin: "KCS", amount: 2 },
     { coin: "RPX", amount: 10 },
-    // { coin: "ENJ", amount: 20 },
-    // { coin: "POE", amount: 50 },
+    { coin: "OCN", amount: 100 },
+    { coin: "TKY", amount: 100 },
     { coin: "OMG", amount: 1 },
-    // { coin: "BTG", amount: 0.1 },
     { coin: "BCH", amount: 0.01 },
 ]
 
