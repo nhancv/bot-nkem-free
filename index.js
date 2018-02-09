@@ -85,7 +85,7 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
             log(msg)
 
         })
-    })
+    }).catch(() => {});
 }
 
 function requestPrivateGetApi(host, endpoint, queryString) {
@@ -126,7 +126,7 @@ function requestPrivateGetApi(host, endpoint, queryString) {
             if (error) reject(error)
             else resolve(response)
         })
-    })
+    }).catch(() => {});
 }
 
 function requestPublicApi(host, endpoint) {
@@ -141,7 +141,7 @@ function requestPublicApi(host, endpoint) {
             else resolve(response)
 
         })
-    })
+    }).catch(() => {});
 }
 
 // requestPrivateGetApi(host, userEndpoint)
@@ -196,11 +196,11 @@ function processing(pairZ, pairY, pairL, inputAmount) {
                     )
                     .then(resolve())
             } else {
-                resolve()
+                reject()
             }
 
         })
-    })
+    }).catch(() => {});
 }
 
 /**
