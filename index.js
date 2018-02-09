@@ -6,11 +6,15 @@ const log = console.log
 var host = "https://api.kucoin.com"
 var userEndpoint = "/v1/user/info"
 
-var targetCoin = "ETC"
+const targetPair = [
+    { coin: "ETC", amount: 0.12 },
+    { coin: "NEO", amount: 2 },
+    { coin: "KCS", amount: 0.1 },
+]
 
-var pairZ = `${targetCoin}-ETH`
-var pairY = `${targetCoin}-BTC`
-var pairL = "ETH-BTC"
+const fee = 0.001 //0.1%
+const remainFee = 1 - fee
+const futureFee = 1 + fee
 
 //================
 //MAKE REST API
@@ -121,50 +125,91 @@ function requestPublicApi(host, endpoint) {
 }
 
 // requestPrivateGetApi(host, userEndpoint)
+///////////////////////////////////////////
+/**
+ * PROCESSING
+ */
+function processing(pairZ, pairY, pairL, inputAmount) {
+    return new Promise(function (resolve, reject) {
+        var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
+            var body = JSON.parse(response.body)
+            return Promise.resolve(body.data[0]) //Buy TargetCoin from ETH
+        })
+        var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(function (response) {
+            var body = JSON.parse(response.body)
+            return Promise.resolve(body.data[0]) //Sell TargetCoin to BTC
+        })
+        var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function (response) {
+            var body = JSON.parse(response.body)
+            return Promise.resolve(body.data[0]) //Buy ETH from BTC
+        })
 
-var fee = 0.001 //0.1%
-var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
-    var body = JSON.parse(response.body)
-    return Promise.resolve(body.data[0]) //Buy TargetCoin from ETH
-})
-var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(function (response) {
-    var body = JSON.parse(response.body)
-    return Promise.resolve(body.data[0]) //Sell TargetCoin to BTC
-})
-var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function (response) {
-    var body = JSON.parse(response.body)
-    return Promise.resolve(body.data[0]) //Buy ETH from BTC
-})
+        Promise.all([getZ, getY, getL]).then(function (values) {
+            console.log(values);
 
-Promise.all([getZ, getY, getL]).then(function (values) {
-    console.log(values);
+            var check = true;
+            var ZPrice = values[0][0].toFixed(8)
+            var ZAmount = inputAmount.toFixed(6)
+            if (ZAmount > values[0][1]) check = false
 
-    var inputAmount = 1 //TargetCoin
+            var YPrice = values[1][0].toFixed(8)
+            var YAmount = (inputAmount * remainFee).toFixed(6)
+            if (YAmount > values[1][1]) check = false
 
-    var ZPrice = values[0][0]
-    var ZAmount = Math.min(inputAmount, values[0][1]).toFixed(6)
-    var YPrice = values[1][0]
-    var YAmount = Math.min(inputAmount, values[1][1]).toFixed(6)
-    var LPrice = values[2][0]
-    var LAmount = Math.min(ZPrice * ZAmount, values[2][1]).toFixed(6)
+            var LPrice = values[2][0].toFixed(8)
+            var LAmount = (ZPrice * ZAmount * futureFee).toFixed(6)
+            if (LAmount > values[2][1]) check = false
 
-    var left = YPrice.toFixed(6)
-    var right = (ZPrice * LPrice * (1 - fee)).toFixed(6)
-    var change = ((right / left - 1) * 100).toFixed(2)
-    var condition = left < right
-    log(`Condition 'Y < Z x L x (1-fee)' is ${condition} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
-    if (condition) {
-        //Buy TargetCoin from ETH
-        requestOrderApi(host, `/v1/${pairZ}/order`, "BUY", ZAmount, ZPrice)
-            .then(
-            //Sell TargetCoin to BTC
-            requestOrderApi(host, `/v1/${pairY}/order`, "SELL", YAmount, YPrice)
-            )
-            .then(
-            //Buy ETH from BTC
-            requestOrderApi(host, `/v1/${pairL}/order`, "BUY", LAmount, LPrice)
-            )
+            log(`${ZPrice} ${YPrice} ${LPrice} : ${ZAmount} ${YAmount} ${LAmount} => check: ${check}`)
+            var left = YPrice
+            var right = (ZPrice * LPrice).toFixed(8)
+            var change = ((left / right - 1) * 100).toFixed(2)
+            var condition = (left > right) && check
+            log(`Condition 'Y > Z x L' is ${condition} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
+            if (condition) {
+                //Buy TargetCoin from ETH
+                requestOrderApi(host, `/v1/${pairZ}/order`, "BUY", ZAmount, ZPrice)
+                    .then(
+                        //Sell TargetCoin to BTC
+                        requestOrderApi(host, `/v1/${pairY}/order`, "SELL", YAmount, YPrice)
+                    )
+                    .then(
+                        //Buy ETH from BTC
+                        requestOrderApi(host, `/v1/${pairL}/order`, "BUY", LAmount, LPrice)
+                    )
+                    .then(resolve())
+            } else {
+                resolve()
+            }
 
+        })
+    })
+}
+
+var i = 0
+function main() {
+    var pairL = "ETH-BTC"
+    if (i == targetPair.length) {
+        setTimeout(() => {
+            i = 0
+            main()
+        }, 2000)
+        return
     }
-});
+    log(i)
+    var targetCoin = targetPair[i].coin
+    var inputAmount = targetPair[i].amount
 
+    var pairZ = `${targetCoin}-ETH`
+    var pairY = `${targetCoin}-BTC`
+    processing(pairZ, pairY, pairL, inputAmount)
+        .then(() => {
+            setTimeout(() => {
+                main()
+            }, 1000)
+        })
+    i++
+}
+
+//EXECUTE MAIN
+main()
