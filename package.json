@@ -1,5 +1,5 @@
 {
-  "name": "kuchange",
+  "name": "kemkem",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -9,6 +9,10 @@
   "author": "Nhan Cao <nhancv92@gmail.com> (https://nhancv.github.io)",
   "license": "ISC",
   "dependencies": {
+    "chalk": "^2.3.0",
     "request": "^2.83.0"
+  },
+  "bin": {
+    "kemkem": "./index.js"
   }
 }

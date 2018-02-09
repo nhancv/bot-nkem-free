@@ -1,6 +1,8 @@
 const request = require('request')
 const crypto = require('crypto')
+const chalk = require('chalk')
 const apiKey = require('./.apikey.json')
+
 const log = console.log
 
 var host = "https://api.kucoin.com"
@@ -8,13 +10,20 @@ var userEndpoint = "/v1/user/info"
 
 const targetPair = [
     { coin: "ETC", amount: 0.12 },
-    { coin: "NEO", amount: 2 },
-    { coin: "KCS", amount: 0.1 },
+    // { coin: "NEO", amount: 0.12 },
+    { coin: "KCS", amount: 2 },
+    { coin: "RPX", amount: 10 },
+    // { coin: "ENJ", amount: 20 },
+    // { coin: "POE", amount: 50 },
+    // { coin: "OMG", amount: 1 },
+    // { coin: "BTG", amount: 0.1 },
+    // { coin: "BCH", amount: 0.01 },
 ]
 
-const fee = 0.001 //0.1%
-const remainFee = 1 - fee
-const futureFee = 1 + fee
+const fee = 0.1 //0.1%
+const checkFee = 0.21 //0.21%
+const remainFee = 1 - fee/100
+const futureFee = 1 + fee/100
 
 //================
 //MAKE REST API
@@ -22,10 +31,12 @@ function isBlank(str) {
     return (!str || /^\s*$/.test(str));
 }
 
-function requestOrderApi(host, endpoint, type, amount, price) {
+function requestOrderApi(host, pairCoin, type, amount, price) {
     return new Promise(function (resolve, reject) {
+        var endpoint = `/v1/${pairCoin}/order`
         var url = host + endpoint
-        log(`Request order ${type} ${amount} ${price}: ${url}`)
+        
+        // log(`Request order ${type} ${amount} ${price}: ${url}`)
         var publicKey = apiKey.Key
         var secret = apiKey.Secret //The secret assigned when the API created
         var nonce = Date.now()
@@ -61,7 +72,7 @@ function requestOrderApi(host, endpoint, type, amount, price) {
                 "price": price
             }
         }, function (error, response, body) {
-            log(`=> Response ${endpoint} ${type} ${amount} ${price}: ${body}`)
+            log(`=> ${type} ${pairCoin} ${amount} ${price}: ${body}`)
             if (error) reject(error)
             else resolve(response)
         })
@@ -112,7 +123,7 @@ function requestPrivateGetApi(host, endpoint, queryString) {
 function requestPublicApi(host, endpoint) {
     return new Promise(function (resolve, reject) {
         var url = host + endpoint
-        log("Request public api: " + url)
+        // log("Request public api: " + url)
         request({
             method: "GET",
             url: url,
@@ -145,8 +156,6 @@ function processing(pairZ, pairY, pairL, inputAmount) {
         })
 
         Promise.all([getZ, getY, getL]).then(function (values) {
-            console.log(values);
-
             var check = true;
             var ZPrice = values[0][0].toFixed(8)
             var ZAmount = inputAmount.toFixed(6)
@@ -160,22 +169,21 @@ function processing(pairZ, pairY, pairL, inputAmount) {
             var LAmount = (ZPrice * ZAmount * futureFee).toFixed(6)
             if (LAmount > values[2][1]) check = false
 
-            log(`${ZPrice} ${YPrice} ${LPrice} : ${ZAmount} ${YAmount} ${LAmount} => check: ${check}`)
             var left = YPrice
             var right = (ZPrice * LPrice).toFixed(8)
             var change = ((left / right - 1) * 100).toFixed(2)
-            var condition = (left > right) && check
-            log(`Condition 'Y > Z x L' is ${condition} [Left: ${left}; Right: ${right}]; Change: ${change}%`)
+            var condition = (left > right) && check && (change > checkFee)
+            log(`Condition is ${condition ? chalk.green("TRUE") : chalk.red("FALSE")} - Change: ${change > 0 ? chalk.green(change) : change < 0 ? chalk.red(change) : change}%`)
             if (condition) {
                 //Buy TargetCoin from ETH
-                requestOrderApi(host, `/v1/${pairZ}/order`, "BUY", ZAmount, ZPrice)
+                requestOrderApi(host, pairZ, "BUY", ZAmount, ZPrice)
                     .then(
                         //Sell TargetCoin to BTC
-                        requestOrderApi(host, `/v1/${pairY}/order`, "SELL", YAmount, YPrice)
+                        requestOrderApi(host, pairY, "SELL", YAmount, YPrice)
                     )
                     .then(
                         //Buy ETH from BTC
-                        requestOrderApi(host, `/v1/${pairL}/order`, "BUY", LAmount, LPrice)
+                        requestOrderApi(host, pairL, "BUY", LAmount, LPrice)
                     )
                     .then(resolve())
             } else {
@@ -186,30 +194,39 @@ function processing(pairZ, pairY, pairL, inputAmount) {
     })
 }
 
-var i = 0
-function main() {
-    var pairL = "ETH-BTC"
-    if (i == targetPair.length) {
-        setTimeout(() => {
-            i = 0
-            main()
-        }, 2000)
-        return
-    }
-    log(i)
-    var targetCoin = targetPair[i].coin
-    var inputAmount = targetPair[i].amount
+/**
+ * Main function
+ * @param {*} index 
+ */
+function main(index) {
+
+    var targetCoin = targetPair[index].coin
+    var inputAmount = targetPair[index].amount
+    log(chalk.blue(`Execute pair: Coin ${targetCoin} - Amount ${inputAmount}`))
 
     var pairZ = `${targetCoin}-ETH`
     var pairY = `${targetCoin}-BTC`
+    var pairL = "ETH-BTC"
+
+    console.time('Estimate')
     processing(pairZ, pairY, pairL, inputAmount)
         .then(() => {
+            console.timeEnd('Estimate')
+
+            var nextIndex = index + 1
+            var nextTimeout = 1000
+            if (nextIndex == targetPair.length) {
+                nextIndex = 0
+                nextTimeout = 3000
+                log(chalk.yellow("--------------------------------------"))
+            }
             setTimeout(() => {
-                main()
-            }, 1000)
+                main(nextIndex)
+            }, nextTimeout)
+
+
         })
-    i++
 }
 
 //EXECUTE MAIN
-main()
+main(0)
