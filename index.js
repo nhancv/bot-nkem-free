@@ -37,7 +37,7 @@ modules.forEach(name => {
       try {
         require(module).main()
       } catch (error) {
-        log(error.code)
+        log(error)
       }
     })
 })
