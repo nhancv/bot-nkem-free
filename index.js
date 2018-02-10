@@ -33,6 +33,7 @@ modules.forEach(name => {
     .command(name)
     .action(function () {
       var module = source + '/' + name
+      log(module)
       try {
         require(module).main()
       } catch (error) {
