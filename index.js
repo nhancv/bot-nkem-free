@@ -31,13 +31,13 @@ var modules = getDirectories(source)
 modules.forEach(name => {
   program
     .command(name)
-    .action(function () {
+    .option('-k, --key', 'Update key', /\s/g, true)
+    .action(function (command) {
       var module = source + '/' + name
-      log(module)
       try {
-        require(module).main()
+        require(module).main(command)
       } catch (error) {
-        log(error)
+        log(error.message)
       }
     })
 })

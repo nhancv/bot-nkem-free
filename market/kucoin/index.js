@@ -3,11 +3,13 @@
 const request = require('request')
 const crypto = require('crypto')
 const chalk = require('chalk')
+const fs = require('fs')
+const path = require('path')
 const print = require('chalk-printer')
 const util = require('../../lib/util')
-const apiKey = require('./.apikey.json')
-
+const keyfile = require('../../lib/keyfile')
 const log = console.log
+const currentDir = path.dirname(fs.realpathSync(__filename))
 
 var host = 'https://api.kucoin.com'
 var userEndpoint = '/v1/user/info'
@@ -32,12 +34,11 @@ const futureFee = 1 + fee / 100
 //MAKE REST API
 function requestOrderApi(host, pairCoin, type, amount, price) {
   return new Promise(function (resolve, reject) {
+    const {publicKey, secretKey} = require('./.apikey.json')
+
     var endpoint = `/v1/${pairCoin}/order`
     var url = host + endpoint
 
-    // log(`Request order ${type} ${amount} ${price}: ${url}`)
-    var publicKey = apiKey.Key
-    var secret = apiKey.Secret //The secret assigned when the API created
     var nonce = Date.now()
     /** 
      *  POST parameters：
@@ -52,7 +53,7 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
     //Make a base64 encoding of the completed string
     var signatureStr = new Buffer(strForSign).toString('base64')
     //KC-API-SIGNATURE in header
-    const signatureResult = crypto.createHmac('sha256', secret)
+    const signatureResult = crypto.createHmac('sha256', secretKey)
       .update(signatureStr)
       .digest('hex')
 
@@ -88,10 +89,10 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
 
 function requestPrivateGetApi(host, endpoint, queryString) {
   return new Promise(function (resolve, reject) {
+    const {publicKey, secretKey} = require('./.apikey.json')
+
     var url = host + endpoint + (util.isBlank(queryString) ? '' : '?' + queryString)
     log('Request private api: ' + url)
-    var publicKey = apiKey.Key
-    var secret = apiKey.Secret //The secret assigned when the API created
     var nonce = Date.now()
     /** 
      *  POST parameters：
@@ -106,7 +107,7 @@ function requestPrivateGetApi(host, endpoint, queryString) {
     //Make a base64 encoding of the completed string
     var signatureStr = new Buffer(strForSign).toString('base64')
     //KC-API-SIGNATURE in header
-    const signatureResult = crypto.createHmac('sha256', secret)
+    const signatureResult = crypto.createHmac('sha256', secretKey)
       .update(signatureStr)
       .digest('hex')
 
@@ -145,9 +146,9 @@ function requestPublicApi(host, endpoint) {
 // requestPrivateGetApi(host, userEndpoint)
 ///////////////////////////////////////////
 /**
- * PROCESSING
+ * TRADING
  */
-function processing(pairZ, pairY, pairL, inputAmount) {
+function trading(pairZ, pairY, pairL, inputAmount) {
   return new Promise(function (resolve, reject) {
     var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
       var body = JSON.parse(response.body)
@@ -163,7 +164,7 @@ function processing(pairZ, pairY, pairL, inputAmount) {
     }).catch(() => { })
 
     Promise.all([getZ, getY, getL]).then(function (values) {
-      var check = true;
+      var check = true
       var ZPrice = values[0][0].toFixed(8)
       var ZAmount = inputAmount.toFixed(6)
       if (ZAmount > values[0][1]) check = false
@@ -199,14 +200,14 @@ function processing(pairZ, pairY, pairL, inputAmount) {
       }
 
     }).catch(() => { })
-  }).catch(() => { });
+  }).catch(() => { })
 }
 
 /**
  * Main function
  * @param {*} index 
  */
-function run(index) {
+function loop(index) {
 
   var targetCoin = targetPair[index].coin
   var inputAmount = targetPair[index].amount
@@ -217,7 +218,7 @@ function run(index) {
   var pairL = 'ETH-BTC'
 
   console.time('Estimate')
-  processing(pairZ, pairY, pairL, inputAmount)
+  trading(pairZ, pairY, pairL, inputAmount)
     .then(() => {
       console.timeEnd('Estimate')
 
@@ -229,20 +230,34 @@ function run(index) {
         log(chalk.yellow('--------------------------------------'))
       }
       setTimeout(() => {
-        run(nextIndex)
+        loop(nextIndex)
       }, nextTimeout)
     }, (error) => {
       console.error(error)
     })
 }
 
+//@nhancv: Run with process
+const process = ({publicKey, secretKey}) => {
+  loop(0)
+}
+
+//@nhancv: Run with command
+const run = (command) => {
+  const currentDir = path.dirname(fs.realpathSync(__filename))
+  keyfile.gen(currentDir, command.key)
+    .then(() => {
+      process(require('./.apikey.json'))
+    }, () => { })
+}
+
 /**
  * EXPORT
  */
 module.exports = {
-  main: function () {
+  main: function (command) {
     try {
-      run(0)
+      run(command)
     } catch (err) {
       print.error(err)
     }
