@@ -25,8 +25,8 @@ const getDirectories = source =>
   fs.readdirSync(source)
     .filter(name => name !== '.DS_Store')
 
-const source = './market'
-var modules = getDirectories('./market')
+const source = `${files.getDirectoryBase()}/market`
+var modules = getDirectories(source)
 
 modules.forEach(name => {
   program
