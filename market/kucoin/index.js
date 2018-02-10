@@ -8,33 +8,24 @@ const path = require('path')
 const print = require('chalk-printer')
 const util = require('../../lib/util')
 const keyfile = require('../../lib/keyfile')
-const log = console.log
+const logFile = require('../../lib/logfile')
+  .setLogName('kucoin.log').clearLog()
 const currentDir = path.dirname(fs.realpathSync(__filename))
+const log = console.log
+
+//@nhancv: Get config from file
+const config = require('./config.json')
+const targetPair = config.targetPair
+const fee = config.fee
+const checkFee = fee * 2
 
 var host = 'https://api.kucoin.com'
 var userEndpoint = '/v1/user/info'
-
-const targetPair = [
-  { coin: 'ETC', amount: 0.1 },
-  { coin: 'NEO', amount: 0.1 },
-  { coin: 'KCS', amount: 2 },
-  { coin: 'RPX', amount: 10 },
-  { coin: 'OCN', amount: 100 },
-  { coin: 'TKY', amount: 100 },
-  { coin: 'OMG', amount: 1 },
-  { coin: 'BCH', amount: 0.01 },
-]
-
-const fee = 0.1 //0.1%
-const checkFee = 0.21 //0.21%
-const remainFee = 1 - fee / 100
-const futureFee = 1 + fee / 100
-
 //================
 //MAKE REST API
 function requestOrderApi(host, pairCoin, type, amount, price) {
   return new Promise(function (resolve, reject) {
-    const {publicKey, secretKey} = require('./.apikey.json')
+    const { publicKey, secretKey } = require('./.apikey.json')
 
     var endpoint = `/v1/${pairCoin}/order`
     var url = host + endpoint
@@ -84,12 +75,12 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
       log(msg)
 
     })
-  }).catch(() => { })
+  })
 }
 
 function requestPrivateGetApi(host, endpoint, queryString) {
   return new Promise(function (resolve, reject) {
-    const {publicKey, secretKey} = require('./.apikey.json')
+    const { publicKey, secretKey } = require('./.apikey.json')
 
     var url = host + endpoint + (util.isBlank(queryString) ? '' : '?' + queryString)
     log('Request private api: ' + url)
@@ -125,7 +116,7 @@ function requestPrivateGetApi(host, endpoint, queryString) {
       if (error) reject(error)
       else resolve(response)
     })
-  }).catch(() => { })
+  })
 }
 
 function requestPublicApi(host, endpoint) {
@@ -140,7 +131,7 @@ function requestPublicApi(host, endpoint) {
       else resolve(response)
 
     })
-  }).catch(() => { })
+  })
 }
 
 // requestPrivateGetApi(host, userEndpoint)
@@ -148,59 +139,84 @@ function requestPublicApi(host, endpoint) {
 /**
  * TRADING
  */
-function trading(pairZ, pairY, pairL, inputAmount) {
+function trading(targetCoin, inputAmount) {
   return new Promise(function (resolve, reject) {
-    var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
-      var body = JSON.parse(response.body)
-      return Promise.resolve(body.data[0]) //Buy TargetCoin from ETH
-    }).catch(() => { })
-    var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(function (response) {
-      var body = JSON.parse(response.body)
-      return Promise.resolve(body.data[0]) //Sell TargetCoin to BTC
-    }).catch(() => { })
-    var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function (response) {
-      var body = JSON.parse(response.body)
-      return Promise.resolve(body.data[0]) //Buy ETH from BTC
-    }).catch(() => { })
+    const mapBody = response => {
+      try {
+        var body = JSON.parse(response.body)
+        if (body.data && body.data.length > 0) {
+          return Promise.resolve(body.data[0])
+        } else {
+          return Promise.reject('Fetching price FAILED')
+        }
+      } catch (error) {
+        return Promise.reject(error)
+      }
+    }
+    const mapError = error => {
+      throw error
+    }
+    var pairZ = `${targetCoin}-ETH`
+    var pairY = `${targetCoin}-BTC`
+    var pairL = 'ETH-BTC'
+
+    var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(mapBody, mapError)
+    var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(mapBody, mapError)
+    var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(mapBody, mapError)
 
     Promise.all([getZ, getY, getL]).then(function (values) {
+
+      var feeInputAmount = (inputAmount * (fee / 100))
+
       var check = true
-      var ZPrice = values[0][0].toFixed(8)
-      var ZAmount = inputAmount.toFixed(6)
+      var ZPrice = values[0][0]
+      var ZAmount = (inputAmount + feeInputAmount)
       if (ZAmount > values[0][1]) check = false
 
-      var YPrice = values[1][0].toFixed(8)
-      var YAmount = (inputAmount * remainFee).toFixed(6)
+      var YPrice = values[1][0]
+      var YAmount = inputAmount
       if (YAmount > values[1][1]) check = false
 
-      var LPrice = values[2][0].toFixed(8)
-      var LAmount = (ZPrice * ZAmount * futureFee).toFixed(6)
+      var LPrice = values[2][0]
+      var LAmount = (ZPrice * ZAmount)
       if (LAmount > values[2][1]) check = false
 
       var left = YPrice
-      var right = (ZPrice * LPrice).toFixed(8)
-      var change = ((left / right - 1) * 100).toFixed(2)
+      var right = (ZPrice * LPrice)
+      var change = ((left / right - 1) * 100)
       var condition = (left > right) && check && (change > checkFee)
-      log(`Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${change > 0 ? chalk.green.bold(change) : change < 0 ? chalk.red.bold(change) : change}%`)
+
+      var changeStr = `${change > 0 ? chalk.green.bold(change.toFixed(2)) : change < 0 ? chalk.red.bold(change.toFixed(2)) : change.toFixed(2)}%`
+      var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
+      log(logMsg)
       if (condition) {
         //Buy TargetCoin from ETH
-        requestOrderApi(host, pairZ, 'BUY', ZAmount, ZPrice)
+        requestOrderApi(host, pairZ, 'BUY', ZAmount.toFixed(6), ZPrice.toFixed(8))
           .then(
             //Sell TargetCoin to BTC
-            requestOrderApi(host, pairY, 'SELL', YAmount, YPrice)
+            () => requestOrderApi(host, pairY, 'SELL', YAmount.toFixed(6), YPrice.toFixed(8))
           )
           .then(
             //Buy ETH from BTC
-            requestOrderApi(host, pairL, 'BUY', LAmount, LPrice)
+            () => requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
           )
-          .then(resolve())
-          .catch(reject)
+          .then(() => {
+            //@nhancv: Log to file
+            var dataLog = `<${targetCoin}> Trigger is ${condition ? 'TRUE' : 'FALSE'} - Change: ${change.toFixed(2)}%`
+              + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)}`
+              + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)}`
+              + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)}`
+            logFile.log(dataLog)
+
+            return Promise.resolve()
+          })
+          .then(resolve, reject)
       } else {
         resolve()
       }
-
-    }).catch(() => { })
-  }).catch(() => { })
+    }, error => { throw error })
+      .catch(reject)
+  })
 }
 
 /**
@@ -213,38 +229,37 @@ function loop(index) {
   var inputAmount = targetPair[index].amount
   log(chalk.blue(`Execute pair: Coin ${chalk.yellow.bold(targetCoin)} - Amount ${inputAmount}`))
 
-  var pairZ = `${targetCoin}-ETH`
-  var pairY = `${targetCoin}-BTC`
-  var pairL = 'ETH-BTC'
-
+  const checkNextRun = () => {
+    var nextIndex = index + 1
+    var nextTimeout = 1000
+    if (nextIndex == targetPair.length) {
+      nextIndex = 0
+      nextTimeout = 3000
+      log(chalk.yellow('--------------------------------------'))
+    }
+    setTimeout(() => {
+      loop(nextIndex)
+    }, nextTimeout)
+  }
   console.time('Estimate')
-  trading(pairZ, pairY, pairL, inputAmount)
+  trading(targetCoin, inputAmount)
     .then(() => {
       console.timeEnd('Estimate')
-
-      var nextIndex = index + 1
-      var nextTimeout = 1000
-      if (nextIndex == targetPair.length) {
-        nextIndex = 0
-        nextTimeout = 3000
-        log(chalk.yellow('--------------------------------------'))
-      }
-      setTimeout(() => {
-        loop(nextIndex)
-      }, nextTimeout)
+      checkNextRun()
     }, (error) => {
-      console.error(error)
+      print.error(error)
+      console.timeEnd('Estimate')
+      checkNextRun()
     })
 }
 
 //@nhancv: Run with process
-const process = ({publicKey, secretKey}) => {
+const process = ({ publicKey, secretKey }) => {
   loop(0)
 }
 
 //@nhancv: Run with command
 const run = (command) => {
-  const currentDir = path.dirname(fs.realpathSync(__filename))
   keyfile.gen(currentDir, command.key)
     .then(() => {
       process(require('./.apikey.json'))
