@@ -6,7 +6,6 @@ const chalk = require('chalk')
 const fs = require('fs')
 const path = require('path')
 const print = require('chalk-printer')
-const util = require('../../lib/util')
 const keyfile = require('../../lib/keyfile')
 const logFile = require('../../lib/logfile')
   .setLogName('kucoin.log').clearLog()
@@ -20,7 +19,8 @@ const fee = config.fee
 const checkFee = fee * 2
 
 var host = 'https://api.kucoin.com'
-var userEndpoint = '/v1/user/info'
+var totalChange = 0
+
 //================
 //MAKE REST API
 function requestOrderApi(host, pairCoin, type, amount, price) {
@@ -78,47 +78,6 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
   })
 }
 
-function requestPrivateGetApi(host, endpoint, queryString) {
-  return new Promise(function (resolve, reject) {
-    const { publicKey, secretKey } = require('./.apikey.json')
-
-    var url = host + endpoint + (util.isBlank(queryString) ? '' : '?' + queryString)
-    log('Request private api: ' + url)
-    var nonce = Date.now()
-    /** 
-     *  POST parameters：
-     *    type: BUY
-     *    amount: 10
-     *    price: 1.1
-     *    Arrange the parameters in ascending alphabetical order (lower cases first), then combine them with & (don't urlencode them, don't add ?, don't add extra &), e.g. amount=10&price=1.1&type=BUY    
-     */
-    var queryString = queryString === undefined ? '' : queryString
-    //splice string for signing
-    var strForSign = endpoint + '/' + nonce + '/' + queryString
-    //Make a base64 encoding of the completed string
-    var signatureStr = new Buffer(strForSign).toString('base64')
-    //KC-API-SIGNATURE in header
-    const signatureResult = crypto.createHmac('sha256', secretKey)
-      .update(signatureStr)
-      .digest('hex')
-
-    request({
-      method: 'GET',
-      url: url,
-      headers: {
-        'KC-API-KEY': publicKey,
-        'KC-API-NONCE': nonce,   //Client timestamp (exact to milliseconds), before using the calibration time, the server does not accept calls with a time difference of more than 3 seconds
-        'KC-API-SIGNATURE': signatureResult,   //signature after client encryption
-        'Content-Type': 'application/json'
-      }
-    }, function (error, response, body) {
-      log(body)
-      if (error) reject(error)
-      else resolve(response)
-    })
-  })
-}
-
 function requestPublicApi(host, endpoint) {
   return new Promise(function (resolve, reject) {
     var url = host + endpoint
@@ -134,7 +93,6 @@ function requestPublicApi(host, endpoint) {
   })
 }
 
-// requestPrivateGetApi(host, userEndpoint)
 ///////////////////////////////////////////
 /**
  * TRADING
@@ -201,14 +159,18 @@ function trading(targetCoin, inputAmount) {
             () => requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
           )
           .then(() => {
-            //@nhancv: Log to file
-            var dataLog = `<${targetCoin}> Trigger is ${condition ? 'TRUE' : 'FALSE'} - Change: ${change.toFixed(2)}%`
-              + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)}`
-              + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)}`
-              + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)}`
-            logFile.log(dataLog)
-
-            return Promise.resolve()
+            try {
+              //@nhancv: Log to file
+              totalChange += change
+              var dataLog = `<${targetCoin}> Change: ${change.toFixed(2)}% - ZChange: ${totalChange}%`
+                + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)}`
+                + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)}`
+                + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)}`
+              logFile.log(dataLog)
+              return Promise.resolve()
+            } catch (error) {
+              return Promise.reject(error)
+            }
           })
           .then(resolve, reject)
       } else {
