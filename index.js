@@ -3,6 +3,7 @@
 const request = require('request')
 const crypto = require('crypto')
 const chalk = require('chalk')
+const util = require('./market/util')
 const apiKey = require('./.apikey.json')
 
 const log = console.log
@@ -28,10 +29,6 @@ const futureFee = 1 + fee / 100
 
 //================
 //MAKE REST API
-function isBlank(str) {
-    return (!str || /^\s*$/.test(str));
-}
-
 function requestOrderApi(host, pairCoin, type, amount, price) {
     return new Promise(function (resolve, reject) {
         var endpoint = `/v1/${pairCoin}/order`
@@ -73,7 +70,7 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
                 "price": price
             }
         }, function (error, response, body) {
-            var msg = `=> ${type} ${pairCoin} ${amount} ${price}:`
+            var msg = `=> ${type} ${pairCoin} ${price} ${amount}:`
             if (error) {
                 msg += chalk.red("ERROR")
                 reject(error)
@@ -85,12 +82,12 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
             log(msg)
 
         })
-    }).catch(() => {});
+    }).catch(() => {})
 }
 
 function requestPrivateGetApi(host, endpoint, queryString) {
     return new Promise(function (resolve, reject) {
-        var url = host + endpoint + (isBlank(queryString) ? "" : "?" + queryString)
+        var url = host + endpoint + (util.isBlank(queryString) ? "" : "?" + queryString)
         log("Request private api: " + url)
         var publicKey = apiKey.Key
         var secret = apiKey.Secret //The secret assigned when the API created
@@ -126,7 +123,7 @@ function requestPrivateGetApi(host, endpoint, queryString) {
             if (error) reject(error)
             else resolve(response)
         })
-    }).catch(() => {});
+    }).catch(() => {})
 }
 
 function requestPublicApi(host, endpoint) {
@@ -141,7 +138,7 @@ function requestPublicApi(host, endpoint) {
             else resolve(response)
 
         })
-    }).catch(() => {});
+    }).catch(() => {})
 }
 
 // requestPrivateGetApi(host, userEndpoint)
@@ -154,15 +151,15 @@ function processing(pairZ, pairY, pairL, inputAmount) {
         var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(function (response) {
             var body = JSON.parse(response.body)
             return Promise.resolve(body.data[0]) //Buy TargetCoin from ETH
-        })
+        }).catch(() => {})
         var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(function (response) {
             var body = JSON.parse(response.body)
             return Promise.resolve(body.data[0]) //Sell TargetCoin to BTC
-        })
+        }).catch(() => {})
         var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(function (response) {
             var body = JSON.parse(response.body)
             return Promise.resolve(body.data[0]) //Buy ETH from BTC
-        })
+        }).catch(() => {})
 
         Promise.all([getZ, getY, getL]).then(function (values) {
             var check = true;
@@ -195,11 +192,12 @@ function processing(pairZ, pairY, pairL, inputAmount) {
                         requestOrderApi(host, pairL, "BUY", LAmount, LPrice)
                     )
                     .then(resolve())
+                    .catch(reject)
             } else {
-                reject()
+                resolve()
             }
 
-        })
+        }).catch(() => {})
     }).catch(() => {});
 }
 
@@ -232,8 +230,8 @@ function main(index) {
             setTimeout(() => {
                 main(nextIndex)
             }, nextTimeout)
-
-
+        }, (error) => {
+            console.error(error)
         })
 }
 
