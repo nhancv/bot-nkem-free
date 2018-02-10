@@ -1,5 +1,5 @@
 {
-  "name": "kem",
+  "name": "nkem",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -10,14 +10,24 @@
   "license": "ISC",
   "dependencies": {
     "chalk": "^2.3.0",
+    "chalk-printer": "^1.1.2",
+    "clear": "0.0.1",
     "commander": "^2.14.1",
-    "request": "^2.83.0"
+    "figlet": "^1.2.0",
+    "lodash": "^4.17.5",
+    "minimist": "^1.2.0",
+    "path": "^0.12.7",
+    "request": "^2.83.0",
+    "string-format-js": "^1.0.0"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nhancv/nc-kem-change.git"
   },
   "bin": {
-    "kem": "./index.js"
+    "nkem": "./index.js"
+  },
+  "devDependencies": {
+    "eslint": "^4.17.0"
   }
 }

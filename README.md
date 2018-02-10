@@ -1,8 +1,14 @@
-# nc-kem-exchange
+# nkem
+
+## Usage
+```
+npm install nkem -g
+
+nkem
+```
+
+
+## Market supported
+
+### Kucoin
 https://kucoinapidocs.docs.apiary.io
-
-Create new key file with name `.apikey.json` with content follow `apikey.example` file
-
-```
-node index.js
-```
