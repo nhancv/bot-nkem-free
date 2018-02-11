@@ -70,10 +70,10 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
         logMsg += chalk.red('ERROR: ' + message)
       } else {
         body = JSON.parse(body)
-        logMsg += body.success ? chalk.green.bold(body.code) : chalk.red.bold(body.code)
+        logMsg += body.success ? chalk.green.bold(body.msg) : chalk.red.bold(body.msg)
 
         status = body.success
-        message = body.code
+        message = body.msg
       }
       resolve(`${status}: ${message}`)
       log(logMsg)
@@ -136,47 +136,50 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
 
     Promise.all([getZ, getY, getL]).then(function (values) {
 
-      var feeInputAmount = (inputAmount * (fee / 100))
+      var feeF = fee / 100
 
       //@nhancv: Optimize price & amount
       var ZPrice = values[0][0]
-      var ZAmount = (inputAmount + feeInputAmount)
+      var ZAmount = (inputAmount + inputAmount * feeF)
       if (ZAmount > values[0][1]) {
         ZAmount = values[0][1]
+
+        inputAmount = ZAmount / (1 + feeF)
       }
 
       var YPrice = values[1][0]
-      var YAmount = ZAmount - feeInputAmount
+      var YAmount = inputAmount
       if (YAmount > values[1][1]) {
         YAmount = values[1][1]
-        ZAmount = YAmount + feeInputAmount
+
+        inputAmount = YAmount
+        ZAmount = (inputAmount + inputAmount * feeF)
       }
 
       var LPrice = values[2][0]
-      var LAmount = (ZPrice * ZAmount)
+      var LAmount = (inputAmount * ZPrice + inputAmount * ZPrice * feeF)
       if (LAmount > values[2][1]) {
         LAmount = values[2][1]
-        ZAmount = LAmount / ZPrice
-        YAmount = ZAmount - feeInputAmount
+
+        inputAmount = LAmount / (ZPrice + ZPrice * feeF)
+        ZAmount = (inputAmount + inputAmount * feeF)
+        YAmount = inputAmount
       }
 
       //@nhancv: Check min amount valid
       var checkMinAmount = isAmountValid(targetCoin, ZAmount) && isAmountValid(targetCoin, YAmount) && isAmountValid(buyCoin, LAmount)
       //@nhancv: Check condition
-      var left = YPrice
-      var right = (ZPrice * LPrice)
-      var change = ((left / right - 1) * 100)
-      var condition = checkMinAmount && (left > right) && (change > fee * 2)
+      var left = feeF + ZPrice * feeF + ZPrice * LPrice * feeF + ZPrice * LPrice
+      var right = YPrice - YPrice * feeF
+      var change = ((right / left - 1) * 100)
+      var condition = checkMinAmount && (left < right)
 
       var changeStr = `${change > 0 ? chalk.green.bold(change.toFixed(2)) : change < 0 ? chalk.red.bold(change.toFixed(2)) : change.toFixed(2)}%`
       var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
       log(logMsg)
       if (condition) {
-        //Buy TargetCoin from BuyCoin
         var step1 = requestOrderApi(host, pairZ, 'BUY', ZAmount.toFixed(6), ZPrice.toFixed(8))
-        //Sell TargetCoin to SellCoin
         var step2 = requestOrderApi(host, pairY, 'SELL', YAmount.toFixed(6), YPrice.toFixed(8))
-        //Buy BuyCoin from SellCoin
         var step3 = requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
 
         Promise.all([step1, step2, step3]).then(values => {
