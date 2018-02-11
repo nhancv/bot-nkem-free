@@ -17,6 +17,7 @@ var host = 'https://api.kucoin.com'
 var totalChange = 0
 
 //@nhancv: Get default config
+const minAmounts = require('./mintrade.json')
 var { targetPair, buyCoin, sellCoin, fee } = require('./config.json')
 //================
 //MAKE REST API
@@ -60,16 +61,21 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
         'price': price
       }
     }, function (error, response, body) {
-      var msg = `=> ${type} ${pairCoin} ${price} ${amount}:`
+      var logMsg = `=> ${type} ${pairCoin} ${price} ${amount}:`
+      var status = 'ERROR'
+      var message = ''
       if (error) {
-        msg += chalk.red('ERROR')
-        reject(error)
+        logMsg += chalk.red('ERROR')
+        message = error.message
       } else {
         body = JSON.parse(body)
-        msg += body.success ? chalk.green.bold(body.code) : chalk.red.bold(body.code)
-        resolve(response)
+        logMsg += body.success ? chalk.green.bold(body.code) : chalk.red.bold(body.code)
+
+        status = body.success
+        message = body.code
       }
-      log(msg)
+      resolve(`${status}: ${message}`)
+      log(logMsg)
 
     })
   })
@@ -109,6 +115,9 @@ const mapBody = response => {
 const mapError = error => {
   throw error
 }
+const isAmoutValid = (coin, amount) => {
+  return (minAmounts[coin] && minAmounts[coin] >= amount)
+}
 
 function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapError) {
   return new Promise(function (resolve, reject) {
@@ -147,40 +156,39 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
         YAmount = ZAmount - feeInputAmount
       }
 
+      //@nhancv: Check min amount valid
+      var checkMinAmount = isAmoutValid(targetCoin, ZAmount) && isAmoutValid(targetCoin, YAmount) && isAmoutValid(buyCoin, LAmount)
+      //@nhancv: Check condition
       var left = YPrice
       var right = (ZPrice * LPrice)
       var change = ((left / right - 1) * 100)
-      var condition = (left > right) && (change > fee * 2)
+      var condition = checkMinAmount && (left > right) && (change > fee * 2)
 
       var changeStr = `${change > 0 ? chalk.green.bold(change.toFixed(2)) : change < 0 ? chalk.red.bold(change.toFixed(2)) : change.toFixed(2)}%`
       var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
       log(logMsg)
       if (condition) {
         //Buy TargetCoin from BuyCoin
-        requestOrderApi(host, pairZ, 'BUY', ZAmount.toFixed(6), ZPrice.toFixed(8))
-          .then(
-            //Sell TargetCoin to SellCoin
-            () => requestOrderApi(host, pairY, 'SELL', YAmount.toFixed(6), YPrice.toFixed(8))
-          )
-          .then(
-            //Buy BuyCoin from SellCoin
-            () => requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
-          )
-          .then(() => {
-            try {
-              //@nhancv: Log to file
-              totalChange += change
-              var dataLog = `<${targetCoin}> Change: ${change.toFixed(2)}% - ZChange: ${totalChange}%`
-                + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)}`
-                + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)}`
-                + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)}`
-              logFile.log(dataLog)
-              return Promise.resolve()
-            } catch (error) {
-              return Promise.reject(error)
-            }
-          })
-          .then(resolve, reject)
+        var step1 = requestOrderApi(host, pairZ, 'BUY', ZAmount.toFixed(6), ZPrice.toFixed(8))
+        //Sell TargetCoin to SellCoin
+        var step2 = requestOrderApi(host, pairY, 'SELL', YAmount.toFixed(6), YPrice.toFixed(8))
+        //Buy BuyCoin from SellCoin
+        var step3 = requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
+
+        Promise.all([step1, step2, step3]).then(values => {
+          try {
+            //@nhancv: Log to file
+            totalChange += change
+            var dataLog = `<${targetCoin}> Change: ${change.toFixed(2)}% - ZChange: ${totalChange}%`
+              + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)} - ${values[0]}`
+              + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)} - ${values[1]}`
+              + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)} - ${values[2]}`
+            logFile.log(dataLog)
+            resolve()
+          } catch (error) {
+            reject(error)
+          }
+        })
       } else {
         resolve()
       }
@@ -245,8 +253,8 @@ const run = (command) => {
 
         //@nhancv: Update log file name
         var configName = path.basename(customConfigPath)
-        logFile.setLogName(`kucoin-${configName.substring(0, configName.lastIndexOf('.'))}`)
-        
+        logFile.setLogName(`kucoin-${configName.substring(0, configName.lastIndexOf('.'))}.log`)
+
       } else {
         print.error('Config file is not found')
       }
