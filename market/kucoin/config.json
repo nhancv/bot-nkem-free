@@ -1,32 +1,20 @@
 {
   "fee": 0.1,
-  "_comment": "Ensure support 3 pair: targetCoin-buyCoin; targetCoin-sellCoin; buyCoin-sellCoin to get INTEREST of sellCoin",
-  "buyCoin": "ETH",
-  "sellCoin": "BTC",
+  "_comment": "Ensure support 3 pair: [targetCoin-buyCoin]; [targetCoin-sellCoin]; [buyCoin-sellCoin] to get INTEREST of {sellCoin}",
+  "buyCoin": "BTC",
+  "sellCoin": "USDT",
   "targetPair": [
     {
-      "coin": "ETC",
-      "amount": 0.11
+      "coin": "ETH",
+      "amount": 0.01
     },
     {
-      "coin": "NEO",
-      "amount": 0.11
+      "coin": "ETC",
+      "amount": 0.5
     },
     {
       "coin": "KCS",
-      "amount": 2
-    },
-    {
-      "coin": "RPX",
-      "amount": 10
-    },
-    {
-      "coin": "OCN",
-      "amount": 100
-    },
-    {
-      "coin": "TKY",
-      "amount": 100
+      "amount": 1.5
     }
   ]
 }

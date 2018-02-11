@@ -31,8 +31,9 @@ var modules = getDirectories(source)
 modules.forEach(name => {
   program
     .command(name)
-    .option('-k, --key', 'Update key', /\s/g, true)
-    .option('-c, --config', 'Locate of config file', /\s/g, true)
+    .option('-k, --key', 'Update key')
+    .option('-c, --config <path>', 'Run with custom config path')
+    .option('-e, --example', 'Show config example')
     .action(function (command) {
       var module = source + '/' + name
       try {

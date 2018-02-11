@@ -6,20 +6,18 @@ const chalk = require('chalk')
 const fs = require('fs')
 const path = require('path')
 const print = require('chalk-printer')
+const files = require('../../lib/file')
 const keyfile = require('../../lib/keyfile')
 const logFile = require('../../lib/logfile')
   .setLogName('kucoin.log').clearLog()
 const currentDir = path.dirname(fs.realpathSync(__filename))
 const log = console.log
 
-//@nhancv: Get config from file
-const config = require('./config.json')
-const { targetPair, buyCoin, sellCoin, fee } = config
-const checkFee = fee * 2
-
 var host = 'https://api.kucoin.com'
 var totalChange = 0
 
+//@nhancv: Get default config
+var { targetPair, buyCoin, sellCoin, fee } = require('./config.json')
 //================
 //MAKE REST API
 function requestOrderApi(host, pairCoin, type, amount, price) {
@@ -96,23 +94,25 @@ function requestPublicApi(host, endpoint) {
 /**
  * TRADING
  */
-function trading(targetCoin, inputAmount) {
+const mapBody = response => {
+  try {
+    var body = JSON.parse(response.body)
+    if (body.data && body.data.length > 0) {
+      return Promise.resolve(body.data[0])
+    } else {
+      return Promise.reject('Fetching price FAILED')
+    }
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+const mapError = error => {
+  throw error
+}
+
+function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapError) {
   return new Promise(function (resolve, reject) {
-    const mapBody = response => {
-      try {
-        var body = JSON.parse(response.body)
-        if (body.data && body.data.length > 0) {
-          return Promise.resolve(body.data[0])
-        } else {
-          return Promise.reject('Fetching price FAILED')
-        }
-      } catch (error) {
-        return Promise.reject(error)
-      }
-    }
-    const mapError = error => {
-      throw error
-    }
+
     var pairZ = `${targetCoin}-${buyCoin}`
     var pairY = `${targetCoin}-${sellCoin}`
     var pairL = `${buyCoin}-${sellCoin}`
@@ -125,23 +125,32 @@ function trading(targetCoin, inputAmount) {
 
       var feeInputAmount = (inputAmount * (fee / 100))
 
-      var check = true
+      //@nhancv: Optimize price & amount
       var ZPrice = values[0][0]
       var ZAmount = (inputAmount + feeInputAmount)
-      if (ZAmount > values[0][1]) check = false
+      if (ZAmount > values[0][1]) {
+        ZAmount = values[0][1]
+      }
 
       var YPrice = values[1][0]
-      var YAmount = inputAmount
-      if (YAmount > values[1][1]) check = false
+      var YAmount = ZAmount - feeInputAmount
+      if (YAmount > values[1][1]) {
+        YAmount = values[1][1]
+        ZAmount = YAmount + feeInputAmount
+      }
 
       var LPrice = values[2][0]
       var LAmount = (ZPrice * ZAmount)
-      if (LAmount > values[2][1]) check = false
+      if (LAmount > values[2][1]) {
+        LAmount = values[2][1]
+        ZAmount = LAmount / ZPrice
+        YAmount = ZAmount - feeInputAmount
+      }
 
       var left = YPrice
       var right = (ZPrice * LPrice)
       var change = ((left / right - 1) * 100)
-      var condition = (left > right) && check && (change > checkFee)
+      var condition = (left > right) && (change > fee * 2)
 
       var changeStr = `${change > 0 ? chalk.green.bold(change.toFixed(2)) : change < 0 ? chalk.red.bold(change.toFixed(2)) : change.toFixed(2)}%`
       var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
@@ -175,7 +184,7 @@ function trading(targetCoin, inputAmount) {
       } else {
         resolve()
       }
-    }, error => { throw error })
+    }, mapError)
       .catch(reject)
   })
 }
@@ -203,7 +212,7 @@ function loop(index) {
     }, nextTimeout)
   }
   console.time('Estimate')
-  trading(targetCoin, inputAmount)
+  trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapError)
     .then(() => {
       console.timeEnd('Estimate')
       checkNextRun()
@@ -221,9 +230,22 @@ const process = ({ publicKey, secretKey }) => {
 
 //@nhancv: Run with command
 const run = (command) => {
-  if (command.config) {
-    log(`Edit config file at: ${chalk.yellow(currentDir + '/config.json')}`)
+  if (command.example) {
+    log(require('./config.json'))
   } else {
+    if (command.config) {
+      //@nhancv: Get custom config from file
+      if (files.fileExists(command.config)) {
+        var config = require(command.config)
+        targetPair = config.targetPair
+        buyCoin = config.buyCoin
+        sellCoin = config.sellCoin
+        fee = config.fee
+      } else {
+        print.error('Config file is not found')
+      }
+    }
+    //@nhancv: Run
     keyfile.gen(currentDir, command.key)
       .then(() => {
         process(require('./.apikey.json'))
