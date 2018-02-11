@@ -147,14 +147,14 @@ function trading(targetCoin, inputAmount) {
       var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
       log(logMsg)
       if (condition) {
-        //Buy TargetCoin from ETH
+        //Buy TargetCoin from BuyCoin
         requestOrderApi(host, pairZ, 'BUY', ZAmount.toFixed(6), ZPrice.toFixed(8))
           .then(
-            //Sell TargetCoin to BTC
+            //Sell TargetCoin to SellCoin
             () => requestOrderApi(host, pairY, 'SELL', YAmount.toFixed(6), YPrice.toFixed(8))
           )
           .then(
-            //Buy ETH from BTC
+            //Buy BuyCoin from SellCoin
             () => requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
           )
           .then(() => {
