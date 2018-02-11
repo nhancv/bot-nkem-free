@@ -14,8 +14,7 @@ const log = console.log
 
 //@nhancv: Get config from file
 const config = require('./config.json')
-const targetPair = config.targetPair
-const fee = config.fee
+const { targetPair, buyCoin, sellCoin, fee } = config
 const checkFee = fee * 2
 
 var host = 'https://api.kucoin.com'
@@ -114,9 +113,9 @@ function trading(targetCoin, inputAmount) {
     const mapError = error => {
       throw error
     }
-    var pairZ = `${targetCoin}-ETH`
-    var pairY = `${targetCoin}-BTC`
-    var pairL = 'ETH-BTC'
+    var pairZ = `${targetCoin}-${buyCoin}`
+    var pairY = `${targetCoin}-${sellCoin}`
+    var pairL = `${buyCoin}-${sellCoin}`
 
     var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(mapBody, mapError)
     var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(mapBody, mapError)
@@ -222,10 +221,14 @@ const process = ({ publicKey, secretKey }) => {
 
 //@nhancv: Run with command
 const run = (command) => {
-  keyfile.gen(currentDir, command.key)
-    .then(() => {
-      process(require('./.apikey.json'))
-    }, () => { })
+  if (command.config) {
+    log(`Edit config file at: ${chalk.yellow(currentDir + '/config.json')}`)
+  } else {
+    keyfile.gen(currentDir, command.key)
+      .then(() => {
+        process(require('./.apikey.json'))
+      }, () => { })
+  }
 }
 
 /**

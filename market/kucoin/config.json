@@ -1,5 +1,8 @@
 {
   "fee": 0.1,
+  "_comment": "Ensure support 3 pair: targetCoin-buyCoin; targetCoin-sellCoin; buyCoin-sellCoin to get INTEREST of sellCoin",
+  "buyCoin": "ETH",
+  "sellCoin": "BTC",
   "targetPair": [
     {
       "coin": "ETC",
@@ -24,14 +27,6 @@
     {
       "coin": "TKY",
       "amount": 100
-    },
-    {
-      "coin": "OMG",
-      "amount": 1
-    },
-    {
-      "coin": "BCH",
-      "amount": 0.011
     }
   ]
 }

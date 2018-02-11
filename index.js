@@ -32,6 +32,7 @@ modules.forEach(name => {
   program
     .command(name)
     .option('-k, --key', 'Update key', /\s/g, true)
+    .option('-c, --config', 'Locate of config file', /\s/g, true)
     .action(function (command) {
       var module = source + '/' + name
       try {
