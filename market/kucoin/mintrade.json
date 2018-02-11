@@ -1,10 +1,34 @@
 {
-  "ETC": 0.01,
-  "BTC": 0.00001,
-  "ETH": 0.0001,
-  "KCS": 1,
-  "NEO": 0.01,
-  "RPX": 5,
-  "OCN": 50,
-  "TKY": 50
+  "ETC": {
+    "min": 0.01,
+    "precision": 6
+  },
+  "BTC": {
+    "min": 0.00001,
+    "precision": 8
+  },
+  "ETH": {
+    "min": 0.0001,
+    "precision": 6
+  },
+  "KCS": {
+    "min": 1,
+    "precision": 4
+  },
+  "NEO": {
+    "min": 0.01,
+    "precision": 6
+  },
+  "RPX": {
+    "min": 5,
+    "precision": 4
+  },
+  "OCN": {
+    "min": 50,
+    "precision": 2
+  },
+  "TKY": {
+    "min": 50,
+    "precision": 4
+  }
 }

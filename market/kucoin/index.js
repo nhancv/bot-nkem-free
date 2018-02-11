@@ -9,6 +9,7 @@ const print = require('chalk-printer')
 const moment = require('moment')
 const files = require('../../lib/file')
 const keyfile = require('../../lib/keyfile')
+const util = require('../../lib/util')
 const logFile = require('nlogj')
   .setLogName(`kucoin.${moment().format('YYYYMMDD_HHmm')}.log`).clearLog()
 const currentDir = path.dirname(fs.realpathSync(__filename))
@@ -118,7 +119,7 @@ const mapError = error => {
 }
 const isAmountValid = (coin, amount) => {
   if (minAmounts[coin]) {
-    return minAmounts[coin] <= amount
+    return minAmounts[coin].min <= amount
   }
   return true
 }
@@ -137,59 +138,63 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
     Promise.all([getZ, getY, getL]).then(function (values) {
 
       var feeF = fee / 100
+      var minPrecisionCoin = 8
+      var minPrecisionTargetCoin = (minAmounts[targetCoin]) ? minAmounts[targetCoin].precision : 6
+      var minPrecisionBuyCoin = (minAmounts[buyCoin]) ? minAmounts[buyCoin].precision : 6
+
 
       //@nhancv: Optimize price & amount
-      var ZPrice = values[0][0]
-      var ZAmount = (inputAmount + inputAmount * feeF)
+      var ZPrice = util.precisionFloorRound(values[0][0], minPrecisionCoin)
+      var ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minPrecisionTargetCoin)
       if (ZAmount > values[0][1]) {
-        ZAmount = values[0][1]
+        ZAmount = util.precisionFloorRound(values[0][1], minPrecisionTargetCoin)
 
-        inputAmount = ZAmount / (1 + feeF)
+        inputAmount = util.precisionFloorRound(ZAmount / (1 + feeF), minPrecisionTargetCoin)
       }
 
-      var YPrice = values[1][0]
+      var YPrice = util.precisionFloorRound(values[1][0], minPrecisionCoin)
       var YAmount = inputAmount
       if (YAmount > values[1][1]) {
-        YAmount = values[1][1]
+        YAmount = util.precisionFloorRound(values[1][1], minPrecisionTargetCoin)
 
         inputAmount = YAmount
-        ZAmount = (inputAmount + inputAmount * feeF)
+        ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minPrecisionTargetCoin)
       }
 
-      var LPrice = values[2][0]
-      var LAmount = (inputAmount * ZPrice + inputAmount * ZPrice * feeF)
+      var LPrice = util.precisionFloorRound(values[2][0], minPrecisionCoin)
+      var LAmount = util.precisionFloorRound((inputAmount * ZPrice + 2 * inputAmount * ZPrice * feeF + inputAmount * ZPrice * feeF * feeF), minPrecisionBuyCoin)
       if (LAmount > values[2][1]) {
-        LAmount = values[2][1]
+        LAmount = util.precisionFloorRound(values[2][1], minPrecisionBuyCoin)
 
-        inputAmount = LAmount / (ZPrice + ZPrice * feeF)
-        ZAmount = (inputAmount + inputAmount * feeF)
+        inputAmount = util.precisionFloorRound(LAmount / (ZPrice + 2 * ZPrice * feeF + ZPrice * feeF * feeF), minPrecisionTargetCoin)
+        ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minPrecisionTargetCoin)
         YAmount = inputAmount
       }
 
       //@nhancv: Check min amount valid
       var checkMinAmount = isAmountValid(targetCoin, ZAmount) && isAmountValid(targetCoin, YAmount) && isAmountValid(buyCoin, LAmount)
       //@nhancv: Check condition
-      var left = feeF + ZPrice * feeF + ZPrice * LPrice * feeF + ZPrice * LPrice
-      var right = YPrice - YPrice * feeF
-      var change = ((right / left - 1) * 100)
+      var left = util.precisionCeilRound(feeF + 2 * ZPrice * LPrice * feeF + ZPrice * LPrice * feeF * feeF + ZPrice * LPrice, minPrecisionCoin)
+      var right = util.precisionFloorRound(YPrice - YPrice * feeF, minPrecisionCoin)
+      var change = util.precisionFloorRound((right / left - 1) * 100, 2)
       var condition = checkMinAmount && (left < right)
 
-      var changeStr = `${change > 0 ? chalk.green.bold(change.toFixed(2)) : change < 0 ? chalk.red.bold(change.toFixed(2)) : change.toFixed(2)}%`
+      var changeStr = `${change > 0 ? chalk.green.bold(change) : change < 0 ? chalk.red.bold(change) : change}%`
       var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
       log(logMsg)
       if (condition) {
-        var step1 = requestOrderApi(host, pairZ, 'BUY', ZAmount.toFixed(6), ZPrice.toFixed(8))
-        var step2 = requestOrderApi(host, pairY, 'SELL', YAmount.toFixed(6), YPrice.toFixed(8))
-        var step3 = requestOrderApi(host, pairL, 'BUY', LAmount.toFixed(6), LPrice.toFixed(8))
+        var step1 = requestOrderApi(host, pairZ, 'BUY', ZAmount, ZPrice)
+        var step2 = requestOrderApi(host, pairY, 'SELL', YAmount, YPrice)
+        var step3 = requestOrderApi(host, pairL, 'BUY', LAmount, LPrice)
 
         Promise.all([step1, step2, step3]).then(values => {
           try {
             //@nhancv: Log to file
             totalChange += change
-            var dataLog = `<${targetCoin}> Change: ${change.toFixed(2)}% - ZChange: ${totalChange.toFixed(2)}%`
-              + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)} - ${values[0]}`
-              + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)} - ${values[1]}`
-              + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)} - ${values[2]}`
+            var dataLog = `<${targetCoin}> Change: ${change}% - ZChange: ${totalChange.toFixed(2)}%`
+              + `\r\nBUY: ${pairZ} ${ZPrice} ${ZAmount} - ${values[0]}`
+              + `\r\nSELL: ${pairY} ${YPrice} ${YAmount} - ${values[1]}`
+              + `\r\nBUY: ${pairL} ${LPrice} ${LAmount} - ${values[2]}`
             logFile.log(dataLog)
             resolve()
           } catch (error) {
