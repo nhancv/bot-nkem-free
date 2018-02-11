@@ -6,10 +6,11 @@ const chalk = require('chalk')
 const fs = require('fs')
 const path = require('path')
 const print = require('chalk-printer')
+const moment = require('moment')
 const files = require('../../lib/file')
 const keyfile = require('../../lib/keyfile')
-const logFile = require('../../lib/logfile')
-  .setLogName('kucoin.log').clearLog()
+const logFile = require('nlogj')
+  .setLogName(`kucoin.${moment().format('YYYYMMDD_HHmm')}.log`).clearLog()
 const currentDir = path.dirname(fs.realpathSync(__filename))
 const log = console.log
 
@@ -65,8 +66,8 @@ function requestOrderApi(host, pairCoin, type, amount, price) {
       var status = 'ERROR'
       var message = ''
       if (error) {
-        logMsg += chalk.red('ERROR')
         message = error.message
+        logMsg += chalk.red('ERROR: ' + message)
       } else {
         body = JSON.parse(body)
         logMsg += body.success ? chalk.green.bold(body.code) : chalk.red.bold(body.code)
@@ -115,8 +116,11 @@ const mapBody = response => {
 const mapError = error => {
   throw error
 }
-const isAmoutValid = (coin, amount) => {
-  return (minAmounts[coin] && minAmounts[coin] >= amount)
+const isAmountValid = (coin, amount) => {
+  if (minAmounts[coin]) {
+    return minAmounts[coin] <= amount
+  }
+  return true
 }
 
 function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapError) {
@@ -157,7 +161,7 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
       }
 
       //@nhancv: Check min amount valid
-      var checkMinAmount = isAmoutValid(targetCoin, ZAmount) && isAmoutValid(targetCoin, YAmount) && isAmoutValid(buyCoin, LAmount)
+      var checkMinAmount = isAmountValid(targetCoin, ZAmount) && isAmountValid(targetCoin, YAmount) && isAmountValid(buyCoin, LAmount)
       //@nhancv: Check condition
       var left = YPrice
       var right = (ZPrice * LPrice)
@@ -179,7 +183,7 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
           try {
             //@nhancv: Log to file
             totalChange += change
-            var dataLog = `<${targetCoin}> Change: ${change.toFixed(2)}% - ZChange: ${totalChange}%`
+            var dataLog = `<${targetCoin}> Change: ${change.toFixed(2)}% - ZChange: ${totalChange.toFixed(2)}%`
               + `\r\nBUY: ${pairZ} ${ZPrice.toFixed(8)} ${ZAmount.toFixed(6)} - ${values[0]}`
               + `\r\nSELL: ${pairY} ${YPrice.toFixed(8)} ${YAmount.toFixed(6)} - ${values[1]}`
               + `\r\nBUY: ${pairL} ${LPrice.toFixed(8)} ${LAmount.toFixed(6)} - ${values[2]}`
@@ -253,7 +257,7 @@ const run = (command) => {
 
         //@nhancv: Update log file name
         var configName = path.basename(customConfigPath)
-        logFile.setLogName(`kucoin-${configName.substring(0, configName.lastIndexOf('.'))}.log`)
+        logFile.setLogName(`kucoin.${configName.substring(0, configName.lastIndexOf('.'))}.${moment().format('YYYYMMDD_HHmm')}.log`)
 
       } else {
         print.error('Config file is not found')

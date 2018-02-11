@@ -17,6 +17,8 @@
     "inquirer": "^5.1.0",
     "lodash": "^4.17.5",
     "minimist": "^1.2.0",
+    "moment": "^2.20.1",
+    "nlogj": "^1.0.2",
     "path": "^0.12.7",
     "request": "^2.83.0",
     "string-format-js": "^1.0.0"

@@ -3,9 +3,10 @@
 const print = require('chalk-printer')
 const path = require('path')
 const fs = require('fs')
+const moment = require('moment')
 const keyfile = require('../../lib/keyfile')
-const logFile = require('../../lib/logfile')
-  .setLogName('binance.log').clearLog()
+const logFile = require('nlogj')
+  .setLogName(`binance.${moment().format('YYYYMMDD_HHmm')}.log`).clearLog()
 
 const log = console.log
 const currentDir = path.dirname(fs.realpathSync(__filename))
@@ -13,7 +14,7 @@ const currentDir = path.dirname(fs.realpathSync(__filename))
 //@nhancv: Run with process
 const process = ({ publicKey, secretKey }) => {
   log({ publicKey, secretKey })
-  
+  logFile.log('test')
 }
 
 //@nhancv: Run with command
