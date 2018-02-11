@@ -233,14 +233,20 @@ const run = (command) => {
   if (command.example) {
     log(require('./config.json'))
   } else {
-    if (command.config) {
+    var customConfigPath = command.config
+    if (customConfigPath) {
       //@nhancv: Get custom config from file
-      if (files.fileExists(command.config)) {
-        var config = require(command.config)
+      if (files.fileExists(customConfigPath)) {
+        var config = require(customConfigPath)
         targetPair = config.targetPair
         buyCoin = config.buyCoin
         sellCoin = config.sellCoin
         fee = config.fee
+
+        //@nhancv: Update log file name
+        var configName = path.basename(customConfigPath)
+        logFile.setLogName(`kucoin-${configName.substring(0, configName.lastIndexOf('.'))}`)
+        
       } else {
         print.error('Config file is not found')
       }
