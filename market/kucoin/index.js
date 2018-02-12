@@ -177,7 +177,7 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
       var left = util.precisionCeilRound(feeF + 2 * ZPrice * LPrice * feeF + ZPrice * LPrice * feeF * feeF + ZPrice * LPrice, minPrecisionCoin)
       var right = util.precisionFloorRound(YPrice - YPrice * feeF, minPrecisionCoin)
       var change = util.precisionFloorRound((right / left - 1) * 100, 2)
-      var condition = checkMinAmount && (left < right)
+      var condition = checkMinAmount && (left < right) && (change >= 0.01)
 
       var changeStr = `${change > 0 ? chalk.green.bold(change) : change < 0 ? chalk.red.bold(change) : change}%`
       var logMsg = `Trigger is ${condition ? chalk.green.bold('TRUE') : chalk.red.bold('FALSE')} - Change: ${changeStr}`
