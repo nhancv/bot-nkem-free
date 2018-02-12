@@ -1,6 +1,7 @@
 {
   "fee": 0.1,
-  "_comment": "Ensure support 3 pair: [targetCoin-buyCoin]; [targetCoin-sellCoin]; [buyCoin-sellCoin] to get INTEREST of {sellCoin}",
+  "priceStrategy": 0,
+  "_comment": "Ensure support 3 pair: [targetCoin-buyCoin]; [targetCoin-sellCoin]; [buyCoin-sellCoin] to get INTEREST of {sellCoin}. Price strategy in one of {-1: best price, 0: avg price, 1: current price}",
   "buyCoin": "BTC",
   "sellCoin": "USDT",
   "targetPair": [

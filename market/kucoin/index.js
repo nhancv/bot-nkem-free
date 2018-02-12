@@ -19,8 +19,8 @@ var host = 'https://api.kucoin.com'
 var totalChange = 0
 
 //@nhancv: Get default config
-const minAmounts = require('./mintrade.json')
-var { targetPair, buyCoin, sellCoin, fee } = require('./config.json')
+const minTrades = require('./mintrade.json')
+var { targetPair, buyCoin, sellCoin, fee, priceStrategy } = require('./config.json')
 //================
 //MAKE REST API
 function requestOrderApi(host, pairCoin, type, amount, price) {
@@ -105,8 +105,12 @@ function requestPublicApi(host, endpoint) {
 const mapBody = response => {
   try {
     var body = JSON.parse(response.body)
-    if (body.data && body.data.length > 0) {
-      return Promise.resolve(body.data[0])
+
+    if (body.data["BUY"].length > 0 && body.data["SELL"].length > 0) {
+      return Promise.resolve({
+        "BUY": body.data["BUY"][0],
+        "SELL": body.data["SELL"][0]
+      })
     } else {
       return Promise.reject('Fetching price FAILED')
     }
@@ -118,8 +122,8 @@ const mapError = error => {
   throw error
 }
 const isAmountValid = (coin, amount) => {
-  if (minAmounts[coin]) {
-    return minAmounts[coin].min <= amount
+  if (minTrades[coin] && minTrades[coin].min) {
+    return minTrades[coin].min <= amount
   }
   return true
 }
@@ -131,51 +135,68 @@ function trading(targetCoin, buyCoin, sellCoin, inputAmount, fee, mapBody, mapEr
     var pairY = `${targetCoin}-${sellCoin}`
     var pairL = `${buyCoin}-${sellCoin}`
 
-    var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders-sell`).then(mapBody, mapError)
-    var getY = requestPublicApi(host, `/v1/${pairY}/open/orders-buy`).then(mapBody, mapError)
-    var getL = requestPublicApi(host, `/v1/${pairL}/open/orders-sell`).then(mapBody, mapError)
+    var getZ = requestPublicApi(host, `/v1/${pairZ}/open/orders`).then(mapBody, mapError)
+    var getY = requestPublicApi(host, `/v1/${pairY}/open/orders`).then(mapBody, mapError)
+    var getL = requestPublicApi(host, `/v1/${pairL}/open/orders`).then(mapBody, mapError)
 
     Promise.all([getZ, getY, getL]).then(function (values) {
 
       var feeF = fee / 100
-      var minPrecisionCoin = 8
-      var minPrecisionTargetCoin = (minAmounts[targetCoin]) ? minAmounts[targetCoin].precision : 6
-      var minPrecisionBuyCoin = (minAmounts[buyCoin]) ? minAmounts[buyCoin].precision : 6
-
+      //@nhancv: Get precision for price
+      var minPricePrecisionBuyCoin = (minTrades[buyCoin] && minTrades[buyCoin].pricePrecision) ? minTrades[buyCoin].pricePrecision : 8
+      var minPricePrecisionSellCoin = (minTrades[sellCoin] && minTrades[sellCoin].pricePrecision) ? minTrades[sellCoin].pricePrecision : 8
+      //@nhancv: Get precision for amount
+      var minAmountPrecisionTargetCoin = (minTrades[targetCoin] && minTrades[targetCoin].amountPrecision) ? minTrades[targetCoin].amountPrecision : 6
+      var minAmountPrecisionBuyCoin = (minTrades[buyCoin] && minTrades[buyCoin].amountPrecision) ? minTrades[buyCoin].amountPrecision : 6
 
       //@nhancv: Optimize price & amount
-      var ZPrice = util.precisionFloorRound(values[0][0], minPrecisionCoin)
-      var ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minPrecisionTargetCoin)
+      var ZPriceBuy = values[0]['BUY'][0]
+      var ZPriceSell = values[0]['SELL'][0]
+      var ZPriceAvg = util.precisionFloorRound((ZPriceSell + ZPriceBuy) / 2, minPricePrecisionBuyCoin)
+      var ZPriceBest = priceStrategy == 0 ? ZPriceAvg : priceStrategy == -1 ? ZPriceSell : ZPriceBuy
+      //BUY
+      var ZPrice = util.precisionFloorRound(ZPriceBest, minPricePrecisionBuyCoin)
+      var ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minAmountPrecisionTargetCoin)
       if (ZAmount > values[0][1]) {
-        ZAmount = util.precisionFloorRound(values[0][1], minPrecisionTargetCoin)
+        ZAmount = util.precisionFloorRound(values[0][1], minAmountPrecisionTargetCoin)
 
-        inputAmount = util.precisionFloorRound(ZAmount / (1 + feeF), minPrecisionTargetCoin)
+        inputAmount = util.precisionFloorRound(ZAmount / (1 + feeF), minAmountPrecisionTargetCoin)
       }
 
-      var YPrice = util.precisionFloorRound(values[1][0], minPrecisionCoin)
+      var YPriceBuy = values[1]['BUY'][0]
+      var YPriceSell = values[1]['SELL'][0]
+      var YPriceAvg = util.precisionFloorRound((YPriceSell + YPriceBuy) / 2, minPricePrecisionSellCoin)
+      var YPriceBest = priceStrategy == 0 ? YPriceAvg : priceStrategy == -1 ? YPriceBuy : YPriceSell
+      //SELL
+      var YPrice = util.precisionFloorRound(YPriceBest, minPricePrecisionSellCoin)
       var YAmount = inputAmount
       if (YAmount > values[1][1]) {
-        YAmount = util.precisionFloorRound(values[1][1], minPrecisionTargetCoin)
+        YAmount = util.precisionFloorRound(values[1][1], minAmountPrecisionTargetCoin)
 
         inputAmount = YAmount
-        ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minPrecisionTargetCoin)
+        ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minAmountPrecisionTargetCoin)
       }
 
-      var LPrice = util.precisionFloorRound(values[2][0], minPrecisionCoin)
-      var LAmount = util.precisionFloorRound((inputAmount * ZPrice + 2 * inputAmount * ZPrice * feeF + inputAmount * ZPrice * feeF * feeF), minPrecisionBuyCoin)
+      var LPriceBuy = values[2]['BUY'][0]
+      var LPriceSell = values[2]['SELL'][0]
+      var LPriceAvg = util.precisionFloorRound((LPriceSell + LPriceBuy) / 2, minPricePrecisionSellCoin)
+      var LPriceBest = priceStrategy == 0 ? LPriceAvg : priceStrategy == -1 ? LPriceSell : LPriceBuy
+      //BUY
+      var LPrice = util.precisionFloorRound(LPriceBest, minPricePrecisionSellCoin)
+      var LAmount = util.precisionFloorRound((inputAmount * ZPrice + 2 * inputAmount * ZPrice * feeF + inputAmount * ZPrice * feeF * feeF), minAmountPrecisionBuyCoin)
       if (LAmount > values[2][1]) {
-        LAmount = util.precisionFloorRound(values[2][1], minPrecisionBuyCoin)
+        LAmount = util.precisionFloorRound(values[2][1], minAmountPrecisionBuyCoin)
 
-        inputAmount = util.precisionFloorRound(LAmount / (ZPrice + 2 * ZPrice * feeF + ZPrice * feeF * feeF), minPrecisionTargetCoin)
-        ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minPrecisionTargetCoin)
+        inputAmount = util.precisionFloorRound(LAmount / (ZPrice + 2 * ZPrice * feeF + ZPrice * feeF * feeF), minAmountPrecisionTargetCoin)
+        ZAmount = util.precisionFloorRound(inputAmount + inputAmount * feeF, minAmountPrecisionTargetCoin)
         YAmount = inputAmount
       }
 
       //@nhancv: Check min amount valid
       var checkMinAmount = isAmountValid(targetCoin, ZAmount) && isAmountValid(targetCoin, YAmount) && isAmountValid(buyCoin, LAmount)
       //@nhancv: Check condition
-      var left = util.precisionCeilRound(feeF + 2 * ZPrice * LPrice * feeF + ZPrice * LPrice * feeF * feeF + ZPrice * LPrice, minPrecisionCoin)
-      var right = util.precisionFloorRound(YPrice - YPrice * feeF, minPrecisionCoin)
+      var left = util.precisionCeilRound(feeF + 2 * ZPrice * LPrice * feeF + ZPrice * LPrice * feeF * feeF + ZPrice * LPrice, Math.min(minPricePrecisionBuyCoin, minPricePrecisionSellCoin))
+      var right = util.precisionFloorRound(YPrice - YPrice * feeF, minPricePrecisionSellCoin)
       var change = util.precisionFloorRound((right / left - 1) * 100, 2)
       var condition = checkMinAmount && (left < right) && (change >= 0.01)
 
@@ -262,6 +283,7 @@ const run = (command) => {
         buyCoin = config.buyCoin
         sellCoin = config.sellCoin
         fee = config.fee
+        priceStrategy = config.priceStrategy
 
         //@nhancv: Update log file name
         var configName = path.basename(customConfigPath)
