@@ -13,8 +13,7 @@ const currentDir = path.dirname(fs.realpathSync(__filename))
 
 //@nhancv: Run with process
 const process = ({ publicKey, secretKey }) => {
-  log({ publicKey, secretKey })
-  logFile.log('test')
+  print.ok('In pro version only')
 }
 
 //@nhancv: Run with command
