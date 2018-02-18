@@ -1,15 +1,12 @@
 # nkem [BETA]
-![npm](https://img.shields.io/npm/v/nkem.svg) ![license](https://img.shields.io/npm/l/nkem.svg) ![github-issues](https://img.shields.io/github/issues/nhancv/nkem.svg)
-
 Awesome Bot tracking intermarket spread
 
 # Use it at your own RISKs
 
-[![nodei.co](https://nodei.co/npm/nkem.png?downloads=true&downloadRank=true&stars=true)](https://www.npmjs.com/package/nkem)
-
 ## Usage
 ```
-npm install nkem -g
+npm install
+npm link
 
 nkem
 ```
