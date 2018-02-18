@@ -1,6 +1,8 @@
 # nkem [BETA]
 Awesome Bot tracking intermarket spread
 
+This project is just a BETA version, it had been moved to private and unpublish on npm. 
+
 # Use it at your own RISKs
 
 ## Usage
@@ -17,7 +19,7 @@ nkem
 ### Kucoin
 https://kucoinapidocs.docs.apiary.io
 
-## Donation
+## Feel free to Donation for support
 ```
 BTC: 19KcCNrf4vDNJc4RnFpUXyU43b1CKQipjZ
 ETH: 0x2Ad6C229E1c5049e6547B3694902b881Eb099c7A
